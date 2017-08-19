@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>xkcd</title>
+	<link rel="stylesheet" type="text/css" href="static/style.css"/>
+</head>
+<body>
+<div class="search">
+<form action="search" method="GET">
+	<input type="text" name="q"/>
+	<input type="submit" value="Search"/>
+</form>
+</div>
+
+<div class="searchResults">
+</div>
+</body>
+</html>
