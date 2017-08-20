@@ -1,18 +1,28 @@
 <!DOCTYPE html>
 <html>
 <head>
-	<title>xkcd</title>
-	<link rel="stylesheet" type="text/css" href="static/style.css"/>
+	<title>xkcd - Search {{ search }}</title>
+	<link rel="shortcut icon" href="/static/icon.ico"/>
+	<link rel="stylesheet" type="text/css" href="/static/style.css"/>
 </head>
 <body>
 <div class="search">
+<a class="LeftButton" href="/comic/?id={{ max_id }}">⇦</a>
 <form action="search" method="GET">
-	<input type="text" name="q"/>
+	<input type="text" name="q" value="{{ search }}"/>
 	<input type="submit" value="Search"/>
 </form>
 </div>
 
-<div class="searchResults">
-</div>
+<ul class="searchResults">
+{% for res in results %}
+	<li class="searchResult">
+		<a href="/comic/?id={{ res.id }}">
+			<span class="searchResultTitle">{{ res.comic.title }}</span>
+			<img class="image" src="/comic/{{ res.img_path }}" title="{{ res.comic.alt }}" alt="{{ res.comic.title }}"/>
+		</a>
+	</li>
+{% endfor %}
+</ul>
 </body>
 </html>

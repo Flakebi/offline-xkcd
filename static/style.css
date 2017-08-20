@@ -53,3 +53,27 @@ a:hover {
 .LeftButton, .RightButton {
 	font-size: 200%;
 }
+
+.searchResults {
+	list-style: none;
+}
+
+.searchResult {
+	margin-top: 5em;
+}
+
+.searchResult a {
+	display: block;
+}
+
+.searchResult a img {
+	vertical-align: middle;
+}
+
+.searchResult a span {
+	margin-right: 2em;
+	display: inline-block;
+	width: 30%;
+	text-align: center;
+	font-size: x-large;
+}

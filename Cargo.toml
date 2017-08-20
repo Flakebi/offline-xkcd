@@ -7,12 +7,17 @@ authors = ["Flakebi <flakebi@t-online.de>"]
 lto = true
 
 [dependencies]
+bit-vec = "*"
 clap = "*"
 error-chain = "*"
+rand = "*"
+regex = "*"
+reqwest = "*"
 rocket = "*"
 rocket_codegen = "*"
 serde = "*"
 serde_derive = "*"
+serde_json = "*"
 
 [dependencies.rocket_contrib]
 version = "*"
