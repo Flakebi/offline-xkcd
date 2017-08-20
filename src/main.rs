@@ -1,4 +1,4 @@
-#![feature(custom_derive, plugin, fnbox)]
+#![feature(custom_derive, plugin, fnbox, iterator_step_by)]
 #![plugin(rocket_codegen)]
 // Limit for error_chain
 #![recursion_limit = "1024"]
@@ -26,6 +26,7 @@ use std::path::{Path, PathBuf};
 use std::result::Result;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
+use std::thread;
 
 use bit_vec::BitVec;
 use clap::{App, AppSettings, Arg, SubCommand};
@@ -193,7 +194,11 @@ fn main() {
 					.default_value("8080")
 					.help("The port for the server to listen")))
 			.subcommand(SubCommand::with_name("update")
-				.about("Update the data from xkcd"))
+				.about("Update the data from xkcd")
+				.arg(Arg::with_name("thread-count").short("j").long("threads")
+					.validator(validate::<u16>)
+					.default_value("4")
+					.help("The number of threads to use for parallel downloading")))
 			.get_matches();
 
 		if let Some(server_cmd) = args.subcommand_matches("server") {
@@ -203,8 +208,9 @@ fn main() {
 				port: u16::from_str(server_cmd.value_of("port").unwrap()).unwrap(),
 			};
 			Box::new(|| start_server(config, Xkcd::new()))
-		} else if let Some(_) = args.subcommand_matches("update") {
-			Box::new(|| update().unwrap())
+		} else if let Some(update_cmd) = args.subcommand_matches("update") {
+			let thread_count = u16::from_str(update_cmd.value_of("thread-count").unwrap()).unwrap();
+			Box::new(move || update(thread_count).unwrap())
 		} else {
 			Box::new(|| unreachable!("Invalid subcommand"))
 		}
@@ -213,6 +219,8 @@ fn main() {
 }
 
 fn download_image(comic: &Comic) -> Result<(), Error> {
+	print!("\rDownloading {}", comic.num - 1);
+	std::io::stdout().flush().unwrap();
 	// Get image
 	let img = if comic.img.starts_with("http:") {
 		format!("https{}", &comic.img[5..])
@@ -229,42 +237,59 @@ fn download_image(comic: &Comic) -> Result<(), Error> {
 	Ok(())
 }
 
-fn update() -> Result<(), Error> {
+fn download_comic(id: usize, comic: Option<&Comic>) -> Result<(), Error> {
+	if let Some(comic) = comic {
+		let path = format!("data/{}", comic.get_img_path());
+		if !Path::new(&path).is_file() {
+			download_image(comic)?;
+		}
+	} else {
+		// Get image data from /<id + 1>/info.0.json
+		let mut result = String::new();
+		reqwest::get(format!("https://xkcd.com/{}/info.0.json", id + 1)
+			.as_str())?.read_to_string(&mut result)?;
+		let comic: Comic = serde_json::from_str(&result)?;
+		{
+			let mut f = File::create(format!("data/{}.json", id).as_str())?;
+			f.write_all(result.as_bytes())?;
+		}
+
+		// Get image
+		download_image(&comic)?;
+	}
+	Ok(())
+}
+
+fn update(thread_count: u16) -> Result<(), Error> {
 	println!("Updating xkcd");
-	let xkcd = Xkcd::new();
+	let xkcd = Arc::new(Xkcd::new());
 	// Get current id from /info.0.json
 	let mut result = String::new();
 	reqwest::get("https://xkcd.com/info.0.json")?.read_to_string(&mut result)?;
 	let latest_comic: Comic = serde_json::from_str(&result)?;
+	println!("Latest comic: {}", latest_comic.num - 1);
 
-	// Excluding the num because ids are one less (starting from 0 instead of 1)
-	for id in 0..latest_comic.num {
-		let _ = (|| -> errors::Result<()> {
-			if let Some(comic) = xkcd.comics.get(id).and_then(|c| c.as_ref()) {
-				let path = format!("data/{}", comic.get_img_path());
-				if !Path::new(&path).is_file() {
-					download_image(comic)?;
-				}
-			} else {
-				print!("\rDownloading {} of {}", id, latest_comic.num - 1);
-				std::io::stdout().flush().unwrap();
-				// Get image data from /<id + 1>/info.0.json
-				result.clear();
-				reqwest::get(format!("https://xkcd.com/{}/info.0.json", id + 1)
-					.as_str())?.read_to_string(&mut result)?;
-				let comic: Comic = serde_json::from_str(&result)?;
-				{
-					let mut f = File::create(format!("data/{}.json", id).as_str())?;
-					f.write_all(result.as_bytes())?;
-				}
-
-				// Get image
-				download_image(&comic)?;
+	// Parallel download
+	let mut threads = Vec::new();
+	for i in 0..(thread_count as usize) {
+		// Excluding the num because ids are one less (starting from 0 instead of 1)
+		let end = latest_comic.num;
+		let xkcd = xkcd.clone();
+		threads.push(thread::spawn(move || {
+			for id in (i..end).step_by(thread_count as usize) {
+				let comic = xkcd.comics.get(id).and_then(|c| c.as_ref());
+				let _ = download_comic(id, comic);
 			}
-			Ok(())
-		})();
+		}));
 	}
-	println!("                                              \n{} images up to date", latest_comic.num);
+
+	// Wait for threads to finish
+	for t in threads {
+		t.join().unwrap();
+	}
+
+	println!("                                              \r\
+		{} images up to date", latest_comic.num);
 	Ok(())
 }
 
@@ -312,6 +337,8 @@ fn handle_comic(xkcd: State<Arc<Mutex<Xkcd>>>, id: IdForm)
 	#[derive(Serialize)]
 	struct ComicContext<'a> {
 		id: usize,
+		next: usize,
+		prev: usize,
 		max_id: usize,
 		comic: &'a Comic,
 		img_path: String,
@@ -320,8 +347,34 @@ fn handle_comic(xkcd: State<Arc<Mutex<Xkcd>>>, id: IdForm)
 	let xkcd = xkcd.lock().unwrap();
 	if let Some(id) = id.id {
 		if let Some(comic) = xkcd.comics.get(id).and_then(|c| c.as_ref()) {
+			let next = {
+				let mut i = id;
+				while let Some(c) = xkcd.comics.get(i + 1) {
+					i += 1;
+					if c.is_some() {
+						break;
+					}
+				}
+				i
+			};
+			let prev = {
+				let mut i = id;
+				while let Some(c) = xkcd.comics.get(i.saturating_sub(1)) {
+					if i == 0 {
+						break;
+					}
+					i -= 1;
+					if c.is_some() {
+						break;
+					}
+				}
+				i
+			};
+
 			let context = ComicContext {
 				id: id,
+				next: next,
+				prev: prev,
 				max_id: xkcd.comics.len() - 1,
 				comic: comic,
 				img_path: comic.get_img_path(),
@@ -332,7 +385,7 @@ fn handle_comic(xkcd: State<Arc<Mutex<Xkcd>>>, id: IdForm)
 				xkcd.comics.len() - 1).as_str()))
 		}
 	} else {
-		// Invalid id
+		// Invalid id (like -1)
 		Err(Redirect::to("/comic/?id=0"))
 	}
 }

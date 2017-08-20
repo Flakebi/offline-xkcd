@@ -4,6 +4,7 @@
 	<title>xkcd - {{ comic.title }}</title>
 	<link rel="shortcut icon" href="/static/icon.ico"/>
 	<link rel="stylesheet" type="text/css" href="/static/style.css"/>
+	<script src="/static/script.js"></script>
 </head>
 <body>
 <div class="search">
@@ -15,9 +16,9 @@
 
 <div class="content">
 	<a class="LeftButton" href="/comic/?id=0">⇤</a>
-	<a class="LeftButton" href="/comic/?id={{ id - 1 }}">←</a>
+	<a class="LeftButton" id="prev" href="/comic/?id={{ prev }}">←</a>
 	<a class="RandomButton" href="/random">Random</a>
-	<a class="RightButton" href="/comic/?id={{ id + 1 }}">→</a>
+	<a class="RightButton" id="next" href="/comic/?id={{ next }}">→</a>
 	<a class="RightButton" href="/comic/?id={{ max_id }}">⇥</a>
 
 	<h2 id="ComicTitle" title="{{ comic.year }}-{{ comic.month }}-{{ comic.day }}">{{ comic.title }}</h2>
