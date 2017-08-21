@@ -18,10 +18,12 @@ extern crate serde;
 extern crate serde_derive;
 extern crate serde_json;
 
-use std::fs::File;
+use std::fs::{DirBuilder, File};
 use std::io::{BufReader, Cursor};
 use std::io::prelude::*;
 use std::net::IpAddr;
+#[cfg(all(not(dox), any(target_os = "redox", unix)))]
+use std::os::unix::fs::DirBuilderExt;
 use std::path::{Path, PathBuf};
 use std::result::Result;
 use std::str::FromStr;
@@ -262,6 +264,15 @@ fn download_comic(id: usize, comic: Option<&Comic>) -> Result<(), Error> {
 
 fn update(thread_count: u16) -> Result<(), Error> {
 	println!("Updating xkcd");
+
+	// Be sure that the data folder exists
+	let mut dir = DirBuilder::new();
+	dir.recursive(true);
+	#[cfg(all(not(dox), any(target_os = "redox", unix)))]
+	dir.mode(0o755);
+
+	dir.create("data").unwrap();
+
 	let xkcd = Arc::new(Xkcd::new());
 	// Get current id from /info.0.json
 	let mut result = String::new();

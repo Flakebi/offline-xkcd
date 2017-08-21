@@ -2,24 +2,31 @@
 name = "xkcd"
 version = "0.1.0"
 authors = ["Flakebi <flakebi@t-online.de>"]
+description = """
+Clone xkcd to browse and search offline
+"""
+repository = "https://github.com/Flakebi/offline-xkcd"
+readme = "README.md"
+keywords = ["xkcd", "offline"]
+license = "MIT/Apache-2.0"
 
 [profile.release]
 lto = true
 
 [dependencies]
-bit-vec = "*"
-clap = "*"
-error-chain = "*"
-rand = "*"
-regex = "*"
-reqwest = "*"
-rocket = "*"
-rocket_codegen = "*"
-serde = "*"
-serde_derive = "*"
-serde_json = "*"
+bit-vec = "0.4"
+clap = "2"
+error-chain = "0.10"
+rand = "0.3"
+regex = "0.2"
+reqwest = "0.7"
+rocket = "0.3"
+rocket_codegen = "0.3"
+serde = "1"
+serde_derive = "1"
+serde_json = "1"
 
 [dependencies.rocket_contrib]
-version = "*"
+version = "0.3"
 default-features = false
 features = ["tera_templates"]
