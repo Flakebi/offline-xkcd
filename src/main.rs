@@ -127,7 +127,7 @@ impl Xkcd {
 		println!("\rAll local comics loaded");
 
 		Xkcd {
-			comics: comics,
+			comics,
 		}
 	}
 }
@@ -142,8 +142,8 @@ impl WebFile {
 		let path = path.into();
 		path.to_str().and_then(|s| get_web_file(s)).map(|content| {
 			WebFile {
-				path: path,
-				content: content,
+				path,
+				content,
 			}
 		})
 	}
@@ -383,11 +383,11 @@ fn handle_comic(xkcd: State<Arc<Mutex<Xkcd>>>, id: IdForm)
 			};
 
 			let context = ComicContext {
-				id: id,
-				next: next,
-				prev: prev,
+				id,
+				next,
+				prev,
 				max_id: xkcd.comics.len() - 1,
-				comic: comic,
+				comic,
 				img_path: comic.get_img_path(),
 			};
 			Ok(Template::render("comic", &context))
@@ -434,7 +434,7 @@ impl<'a> SearchState<'a> {
 				if !self.stored_comics[i] && f(comic) {
 					self.results.push(ComicSearchResult {
 						id: i,
-						comic: comic,
+						comic,
 						img_path: comic.get_img_path(),
 					});
 					self.stored_comics.set(i, true);
