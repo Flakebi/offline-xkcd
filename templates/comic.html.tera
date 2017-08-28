@@ -4,7 +4,7 @@
 	<title>xkcd - {{ comic.title }}</title>
 	<link rel="shortcut icon" href="/static/icon.ico"/>
 	<link rel="stylesheet" type="text/css" href="/static/style.css"/>
-	<script src="/static/script.js"></script>
+	<script async src="/static/script.js"></script>
 </head>
 <body>
 <div class="search">

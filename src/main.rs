@@ -119,11 +119,13 @@ impl Xkcd {
 			}
 		}
 		// Remove trailing Nones
-		let mut i = comics.len();
-		while comics[i - 1].is_none() {
-			i -= 1;
+		if !comics.is_empty() {
+			let mut i = comics.len();
+			while comics[i - 1].is_none() {
+				i -= 1;
+			}
+			comics.drain(i..);
 		}
-		comics.drain(i..);
 		println!("\rAll local comics loaded");
 
 		Xkcd {
