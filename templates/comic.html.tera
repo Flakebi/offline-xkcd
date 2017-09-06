@@ -15,11 +15,15 @@
 </div>
 
 <div class="content">
-	<a class="LeftButton" href="/comic/?id=0">⇤</a>
-	<a class="LeftButton" id="prev" href="/comic/?id={{ prev }}">←</a>
+	{% if id != prev %}
+		<a class="LeftButton" href="/comic/?id=0">⇤</a>
+		<a class="LeftButton" id="prev" href="/comic/?id={{ prev }}">←</a>
+	{% endif %}
 	<a class="RandomButton" href="/random">Random</a>
-	<a class="RightButton" id="next" href="/comic/?id={{ next }}">→</a>
-	<a class="RightButton" href="/comic/?id={{ max_id }}">⇥</a>
+	{% if id != next %}
+		<a class="RightButton" id="next" href="/comic/?id={{ next }}">→</a>
+		<a class="RightButton" href="/comic/?id={{ max_id }}">⇥</a>
+	{% endif %}
 
 	<h2 id="ComicTitle" title="{{ comic.year }}-{{ comic.month }}-{{ comic.day }}">{{ comic.title }}</h2>
 	<div class="ImageContainer">
