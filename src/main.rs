@@ -1,11 +1,9 @@
-#![feature(custom_derive, plugin, fnbox, iterator_step_by)]
+#![feature(attr_literals, custom_derive, plugin, fnbox, iterator_step_by)]
 #![plugin(rocket_codegen)]
 // Limit for error_chain
 #![recursion_limit = "1024"]
 
 extern crate bit_vec;
-#[macro_use]
-extern crate clap;
 #[macro_use]
 extern crate error_chain;
 extern crate rand;
@@ -17,6 +15,9 @@ extern crate serde;
 #[macro_use]
 extern crate serde_derive;
 extern crate serde_json;
+extern crate structopt;
+#[macro_use]
+extern crate structopt_derive;
 
 use std::fs::{DirBuilder, File};
 use std::io::{BufReader, Cursor};
@@ -26,12 +27,10 @@ use std::net::IpAddr;
 use std::os::unix::fs::DirBuilderExt;
 use std::path::{Path, PathBuf};
 use std::result::Result;
-use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use std::thread;
 
 use bit_vec::BitVec;
-use clap::{App, AppSettings, Arg, SubCommand};
 use rand::Rng;
 use regex::Regex;
 use rocket::{config, State};
@@ -39,6 +38,8 @@ use rocket::http::{ContentType, Status};
 use rocket::response::{Redirect, Responder, Response};
 use rocket::request::Request;
 use rocket_contrib::Template;
+use structopt::StructOpt;
+use structopt::clap::AppSettings;
 
 #[allow(unused_doc_comment)]
 mod errors {
@@ -47,6 +48,7 @@ mod errors {
 		foreign_links {
 			Io(::std::io::Error);
 			Reqwest(::reqwest::Error);
+			Rocket(::rocket::config::ConfigError);
 			Serde(::serde_json::Error);
 		}
 	}
@@ -162,11 +164,6 @@ impl<'r> Responder<'r> for WebFile {
 	}
 }
 
-fn validate<T: FromStr>(val: String) -> std::result::Result<(), String>
-	where T::Err: std::fmt::Display {
-	T::from_str(val.as_str()).map(|_| ()).map_err(|e| format!("{}", e))
-}
-
 fn get_web_file(path: &str) -> Option<Vec<u8>> {
 	File::open(path).ok().and_then(|mut file| {
 		let mut content = Vec::new();
@@ -174,53 +171,46 @@ fn get_web_file(path: &str) -> Option<Vec<u8>> {
 	})
 }
 
-fn main() {
-	let fun: Box<std::boxed::FnBox()> = {
-		// Parse command line options
-		let args = App::new("xkcd")
-			.version(crate_version!())
-			.author(crate_authors!())
-			.about("xkcd offline clone")
-			// Recursively for all subcommands
-			.global_settings(&[
-				AppSettings::ColoredHelp,
-				AppSettings::VersionlessSubcommands,
-			])
-			.setting(AppSettings::SubcommandRequiredElseHelp)
-			.subcommand(SubCommand::with_name("server")
-				.about("start the local xkcd server")
-				.arg(Arg::with_name("address").short("a").long("address")
-					.validator(validate::<IpAddr>)
-					.default_value("0.0.0.0")
-					.help("The address for the server to listen"))
-				.arg(Arg::with_name("port").short("p").long("port")
-					.validator(validate::<u16>)
-					.default_value("8080")
-					.help("The port for the server to listen")))
-			.subcommand(SubCommand::with_name("update")
-				.about("Update the data from xkcd")
-				.arg(Arg::with_name("thread-count").short("j").long("threads")
-					.validator(validate::<u16>)
-					.default_value("4")
-					.help("The number of threads to use for parallel downloading")))
-			.get_matches();
+#[derive(StructOpt, Debug)]
+#[structopt(global_settings_raw = "&[AppSettings::ColoredHelp, AppSettings::VersionlessSubcommands]")]
+enum Args {
+	#[structopt(name = "server", about = "start the local xkcd server")]
+	Server {
+		/// The address for the server to listen
+		#[structopt(short = "a", long = "address", default_value = "0.0.0.0")]
+		address: IpAddr,
+		/// The port for the server to listen
+		#[structopt(short = "p", long = "port", default_value = "8080")]
+		port: u16,
+	},
 
-		if let Some(server_cmd) = args.subcommand_matches("server") {
-			let config = Config {
-				address: IpAddr::from_str(server_cmd.value_of("address").unwrap())
-					.unwrap(),
-				port: u16::from_str(server_cmd.value_of("port").unwrap()).unwrap(),
-			};
-			Box::new(|| start_server(config, Xkcd::new()))
-		} else if let Some(update_cmd) = args.subcommand_matches("update") {
-			let thread_count = u16::from_str(update_cmd.value_of("thread-count").unwrap()).unwrap();
-			Box::new(move || update(thread_count).unwrap())
-		} else {
-			Box::new(|| unreachable!("Invalid subcommand"))
+	#[structopt(name = "update", about = "update the data from xkcd")]
+	Update {
+		/// The number of threads to use for parallel downloading
+		#[structopt(short = "j", long = "jobs", default_value = "4")]
+		jobs: u16,
+	},
+}
+
+quick_main!(|| -> Result<(), Error> {
+	let fun: Box<std::boxed::FnBox() -> Result<(), Error>> = {
+		// Parse command line options
+		let args = Args::from_args();
+
+		match args {
+			Args::Server { address, port } => {
+				let config = Config {
+					address,
+					port,
+				};
+				Box::new(|| start_server(config, Xkcd::new()))
+			}
+			Args::Update { jobs } => Box::new(move || update(jobs)),
 		}
 	};
-	fun()
-}
+	fun()?;
+	Ok(())
+});
 
 fn download_image(comic: &Comic) -> Result<(), Error> {
 	print!("\rDownloading {}", comic.num - 1);
@@ -306,7 +296,7 @@ fn update(thread_count: u16) -> Result<(), Error> {
 	Ok(())
 }
 
-fn start_server(config: Config, xkcd: Xkcd) {
+fn start_server(config: Config, xkcd: Xkcd) -> Result<(), Error> {
 	// Enable logging
 	rocket::logger::init(rocket::config::LoggingLevel::Normal);
 	let rocket_config = config::Config::build(config::Environment::active()
@@ -325,6 +315,7 @@ fn start_server(config: Config, xkcd: Xkcd) {
 		.manage(Arc::new(Mutex::new(xkcd)))
 		.attach(Template::fairing());
 	r.launch();
+	Ok(())
 }
 
 #[get("/static/<file..>")]
