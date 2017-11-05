@@ -15,11 +15,12 @@ lto = true
 
 [dependencies]
 bit-vec = "0.4"
-clap = "2"
-error-chain = "0.10"
+structopt = "0.1"
+structopt-derive = "0.1"
+error-chain = "0.11"
 rand = "0.3"
 regex = "0.2"
-reqwest = "0.7"
+reqwest = "0.8"
 rocket = "0.3"
 rocket_codegen = "0.3"
 serde = "1"
